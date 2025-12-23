@@ -539,7 +539,7 @@ int32_t apple_ble_read_state_app(void* p) {
     furi_hal_bt_reinit();
     furi_delay_ms(500);
 
-    if(furi_hal_bt_sniffer_start(sniffer_packet_cb, app)) {
+    if(furi_hal_bt_start_rx(sniffer_packet_cb, app)) {
         app->sniffer_started = true;
         FURI_LOG_I(TAG, "Sniffer started");
     } else {
@@ -552,7 +552,7 @@ int32_t apple_ble_read_state_app(void* p) {
 
     while(!exit_loop) {
         if (!app->sniffer_active) {
-            app->sniffer_active = furi_hal_bt_is_sniffer_active();
+            app->sniffer_active = furi_hal_bt_is_active();
         }
 
         app->loop_count++;
@@ -624,7 +624,7 @@ int32_t apple_ble_read_state_app(void* p) {
     }
 
     if(app->sniffer_started) {
-        furi_hal_bt_sniffer_stop();
+        furi_hal_bt_stop_rx();
         FURI_LOG_I(TAG, "Stopped BLE sniffer");
     }
 
