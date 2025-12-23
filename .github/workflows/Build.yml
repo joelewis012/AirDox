@@ -3,7 +3,7 @@ on:
   push:
     ## put your main branch name under "braches"
     #branches: 
-    #  - master 
+    #  - master
   pull_request:
   schedule: 
     # do a build every day
@@ -25,12 +25,12 @@ jobs:
             sdk-channel: dev
     name: 'ufbt: Build for ${{ matrix.name }}'
     steps:
-      - name: Build Flipper Application Package (.fap)
-        uses: flipperdevices/flipperzero-ufbt-action@v0.1.3
       - name: Checkout
         uses: actions/checkout@v4
       - name: Build with ufbt
         uses: flipperdevices/flipperzero-ufbt-action@v0.1
+      - name: Build Flipper Application Package (.fap)
+        uses: flipperdevices/flipperzero-ufbt-action@v0.1.3
         id: build-app
         with:
           sdk-channel: ${{ matrix.sdk-channel }}
