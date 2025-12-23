@@ -23,7 +23,7 @@ jobs:
             # you can also use other modes for specifying SDK sources
             sdk-index-url: https://github.com/Next-Flip/Momentum-Firmware/blob/dev/tsconfig.json
             sdk-channel: dev
-    name: 'ufbt: Build for ${{ matrix.name }}'
+    name: 'ufbt: Build for ${{ AirDox }}'
     steps:
       - name: Build Flipper Application Package (.fap)
         uses: flipperdevices/flipperzero-ufbt-action@v0.1.4
@@ -33,8 +33,8 @@ jobs:
         uses: flipperdevices/flipperzero-ufbt-action@v0.1 
         id: build-app
         with:
-          sdk-channel: ${{ matrix.sdk-channel }}
-          sdk-index-url: ${{ matrix.sdk-index-url }}
+          sdk-channel: ${{ dev }}
+          sdk-index-url: ${{ https://github.com/Next-Flip/Momentum-Firmware/blob/dev/tsconfig.json }}
       - name: Upload app artifacts
         uses: actions/upload-artifact@v6.0.0
         with:
