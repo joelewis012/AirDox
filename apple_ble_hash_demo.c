@@ -915,7 +915,7 @@ int32_t apple_ble_hash_demo_app(void* p) {
             furi_hal_bt_reinit();
             furi_delay_ms(500);
             
-            if(furi_hal_bt_sniffer_start(sniffer_packet_cb, app)) {
+            if(furi_hal_bt_start_rx(sniffer_packet_cb, app)) {
                 app->sniffer_active = true;
                 FURI_LOG_I(TAG, "BLE sniffer started with brute force file");
             } else {
@@ -958,7 +958,7 @@ int32_t apple_ble_hash_demo_app(void* p) {
                             furi_hal_bt_reinit();
                             furi_delay_ms(500);
                             
-                            if(furi_hal_bt_sniffer_start(sniffer_packet_cb, app)) {
+                            if(furi_hal_bt_start_rx(sniffer_packet_cb, app)) {
                                 app->sniffer_active = true;
                                 FURI_LOG_I(TAG, "BLE sniffer started successfully");
                             } else {
@@ -1055,7 +1055,7 @@ int32_t apple_ble_hash_demo_app(void* p) {
     }
     
     if(app->sniffer_active) {
-        furi_hal_bt_sniffer_stop();
+        furi_hal_bt_stop_rx();
     }
     
     view_port_enabled_set(app->view_port, false);
