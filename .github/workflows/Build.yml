@@ -1,42 +1,47 @@
-name: "FAP: Build for multiple SDK sources"
+name: Build AirDox FAP
+
 on:
   push:
-    ## put your main branch name under "braches"
-    #branches: 
-    #  - master
-  pull_request:
-  schedule: 
-    # do a build every day
-    - cron: "1 1 * * *"
+    branches: [ master ]
+  workflow_dispatch:
+
 jobs:
-  ufbt-build-action:
+  build:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - name: dev channel
-            sdk-channel: dev
-          - name: release channel
-            sdk-channel: release
-          - name: Unofficial firmware
-            # example URL, replace with a valid one
-            # you can also use other modes for specifying SDK sources
-            sdk-index-url: https://github.com/Next-Flip/Momentum-Firmware/blob/dev/tsconfig.json
-            sdk-channel: dev
-    name: 'ufbt: Build for ${{ AirDox }}'
+
     steps:
-      - name: Build Flipper Application Package (.fap)
-        uses: flipperdevices/flipperzero-ufbt-action@v0.1.4
-      - name: Checkout
+      - name: Checkout your app
         uses: actions/checkout@v4
-      - name: Build with ufbt
-        uses: flipperdevices/flipperzero-ufbt-action@v0.1 
-        id: build-app
+
+      - name: Checkout Flipper firmware (dev)
+        uses: actions/checkout@v4
         with:
-          sdk-channel: ${{ dev }}
-          sdk-index-url: ${{ https://github.com/Next-Flip/Momentum-Firmware/blob/dev/tsconfig.json }}
-      - name: Upload app artifacts
-        uses: actions/upload-artifact@v6.0.0
+          repository: flipperdevices/flipperzero-firmware
+          ref: dev
+          path: flipperzero-firmware
+
+      - name: Install build tools
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            python3 \
+            git \
+            gcc-arm-none-eabi \
+            libnewlib-arm-none-eabi \
+            libstdc++-arm-none-eabi-newlib
+
+      - name: Copy app into firmware
+        run: |
+          mkdir -p flipperzero-firmware/applications_user/air_dox
+          cp *.c *.h *.png application.fam flipperzero-firmware/applications_user/air_dox/
+
+      - name: Build the app
+        working-directory: flipperzero-firmware
+        run: |
+          ./fbt fap_air_dox
+
+      - name: Upload .fap
+        uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.repository.name }}-${{ steps.build-app.outputs.suffix }}
-          path: ${{ steps.build-app.outputs.fap-artifacts }}
+          name: air_dox.fap
+          path: flipperzero-firmware/build/f7-firmware-D/.extapps/air_dox.fap
