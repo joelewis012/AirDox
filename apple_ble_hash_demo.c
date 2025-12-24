@@ -959,6 +959,8 @@ int32_t apple_ble_hash_demo_app(void* p) {
                             furi_delay_ms(500);
                             
                             if(furi_hal_bt_start_rx(sniffer_packet_cb, app)) {
+    // stuff
+} 
                                 app->sniffer_active = true;
                                 FURI_LOG_I(TAG, "BLE sniffer started successfully");
                             } else {
