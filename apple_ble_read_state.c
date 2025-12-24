@@ -539,7 +539,7 @@ int32_t apple_ble_read_state_app(void* p) {
     furi_hal_bt_reinit();
     furi_delay_ms(500);
 
-    if(furi_hal_bt_start_rx(sniffer_packet_cb, app)) {
+    furi_hal_bt_start_rx(sniffer_packet_cb, app);
         app->sniffer_started = true;
         FURI_LOG_I(TAG, "Sniffer started");
     } else {
