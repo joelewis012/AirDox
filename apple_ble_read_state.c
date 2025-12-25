@@ -2,291 +2,206 @@
 #include <gui/gui.h>
 #include <input/input.h>
 #include <furi_hal_bt.h>
-#include <stdint.h>
+#include <furi_hal_light.h>
+
 #include <stdlib.h>
 #include <string.h>
-#include <furi_hal_light.h>
-#include <dialogs/dialogs.h>
-#include <storage/storage.h>
-#include <toolbox/stream/buffered_file_stream.h>
-#include "tiny_e164.h"
-#include "picohash.h"
-#include "apple_ble_hash_demo.h"
+#include <stdint.h>
 
-#define TAG "AppleBleHashDemo"
-#define MAX_PHONE_NUMBERS 1000
-#define APPLE_COMPANY_ID 0x004C
-#define AIRDROP_TYPE 0x05
-#define MAX_HASHES 100
-#define MAX_LOG_LINES 10
-#define MAX_EXTRACTED_HASHES 8
+#include "apple_ble_read_state.h"
+
+#define TAG "AppleBLE"
+#define MAX_DEVICES 64
+#define MAC_ADDR_LEN 18
+
+/* ---------------- Device Model ---------------- */
 
 typedef struct {
-    uint8_t hash[2];
-    char phone[17];
-} phone_hash_lookup_t;
-
-typedef struct {
-    phone_hash_lookup_t* entries;
-    size_t count;
-    size_t capacity;
-} phone_hash_db_t;
-
-typedef struct {
-    uint8_t extracted_hashes[MAX_EXTRACTED_HASHES][2];
-    uint8_t num_extracted_hashes;
-    uint32_t timestamp;
-    uint32_t seen_count;
-    char matched_phone[17];
-    char packet_data[32];
+    char mac[MAC_ADDR_LEN];
     int8_t rssi;
-} HashEntry;
-
-typedef struct {
-    char log_lines[MAX_LOG_LINES][64];
-    int log_count;
-    int log_start;
-} LogBuffer;
-
-typedef enum {
-    AppStateConfig,
-    AppStateLoading,
-    AppStateSniffer
-} AppState;
+    uint32_t last_seen;
+} AppleDevice;
 
 typedef struct {
     FuriMessageQueue* input_queue;
     ViewPort* view_port;
     Gui* gui;
 
-    HashEntry hashes[MAX_HASHES];
-    size_t hash_count;
-    size_t scroll_pos;
+    AppleDevice devices[MAX_DEVICES];
+    size_t device_count;
+    size_t scroll;
 
-    LogBuffer log_buffer;
+    bool sniffer_running;
+    uint32_t packets;
+} AppleBleApp;
 
-    bool sniffer_active;
-    uint32_t packets_seen;
-    uint32_t airdrop_packets_seen;
-    uint32_t matches_found;
+/* ---------------- Helpers ---------------- */
 
-    AppState state;
-    bool use_brute_force;
-    char brute_force_file[256];
-    int config_selection;
-
-    phone_e164_t* phone_numbers;
-    size_t phone_numbers_count;
-    size_t phone_numbers_capacity;
-
-    phone_hash_db_t hash_db;
-} AppleBleHashDemo;
-
-/* ----- Phone hash DB functions ----- */
-int phone_hash_db_init(phone_hash_db_t* db) {
-    if(!db) return -1;
-    db->entries = NULL;
-    db->count = 0;
-    db->capacity = 0;
-    return 0;
+static void mac_to_str(const uint8_t* mac, char* out) {
+    snprintf(
+        out,
+        MAC_ADDR_LEN,
+        "%02X:%02X:%02X:%02X:%02X:%02X",
+        mac[0], mac[1], mac[2],
+        mac[3], mac[4], mac[5]);
 }
 
-void phone_hash_db_free(phone_hash_db_t* db) {
-    if(db && db->entries) {
-        free(db->entries);
-        db->entries = NULL;
-        db->count = 0;
-        db->capacity = 0;
-    }
-}
+static AppleDevice* find_or_add_device(
+    AppleBleApp* app,
+    const uint8_t* mac,
+    int8_t rssi) {
 
-const char* phone_hash_db_lookup(phone_hash_db_t* db, const uint8_t hash[2]) {
-    if(!db || !db->entries) return NULL;
-    for(size_t i=0; i<db->count; i++) {
-        if(db->entries[i].hash[0]==hash[0] && db->entries[i].hash[1]==hash[1])
-            return db->entries[i].phone;
-    }
-    return NULL;
-}
+    char mac_str[MAC_ADDR_LEN];
+    mac_to_str(mac, mac_str);
 
-void phone_hash_db_add_entry(phone_hash_db_t* db, const uint8_t hash[2], const char* phone) {
-    if(!db || !phone) return;
-
-    if(db->count >= db->capacity) {
-        size_t new_capacity = db->capacity==0 ? 100 : db->capacity*2;
-        if(new_capacity > MAX_PHONE_NUMBERS) new_capacity = MAX_PHONE_NUMBERS;
-        phone_hash_lookup_t* new_entries = realloc(db->entries, sizeof(phone_hash_lookup_t)*new_capacity);
-        if(!new_entries) return;
-        db->entries = new_entries;
-        db->capacity = new_capacity;
-    }
-
-    if(db->count < db->capacity) {
-        db->entries[db->count].hash[0] = hash[0];
-        db->entries[db->count].hash[1] = hash[1];
-        strncpy(db->entries[db->count].phone, phone, 16);
-        db->entries[db->count].phone[16]='\0';
-        db->count++;
-    }
-}
-
-/* ----- Utils ----- */
-static const uint8_t* find_ad_type(const uint8_t* data, uint16_t len, uint8_t type, uint8_t* found_len) {
-    uint16_t offset = 0;
-    while(offset < len) {
-        uint8_t ad_len = data[offset];
-        if(ad_len == 0 || offset+1+ad_len>len) break;
-        uint8_t ad_type = data[offset+1];
-        if(ad_type==type) {
-            *found_len = ad_len-1;
-            return &data[offset+2];
-        }
-        offset += ad_len + 1;
-    }
-    return NULL;
-}
-
-static void format_packet_data(const uint8_t* data, uint16_t len, char* str, size_t str_len) {
-    size_t bytes_to_show = len>15?15:len;
-    size_t pos=0;
-    for(size_t i=0;i<bytes_to_show && pos<str_len-3;i++){
-        pos += snprintf(str+pos,str_len-pos,"%02X",data[i]);
-        if(i<bytes_to_show-1 && pos<str_len-3) str[pos++]=' ';
-    }
-    if(len>15 && pos<str_len-4) strcpy(str+pos,"...");
-    str[str_len-1]='\0';
-}
-
-static void compute_phone_hash(const char* phone_number, uint8_t* hash_out) {
-    const char* digits = phone_number;
-    if(*digits=='+') digits++;
-    picohash_ctx_t ctx;
-    picohash_init_sha256(&ctx);
-    picohash_update(&ctx,digits,strlen(digits));
-    uint8_t full_hash[PICOHASH_SHA256_DIGEST_LENGTH];
-    picohash_final(&ctx, full_hash);
-    hash_out[0]=full_hash[0];
-    hash_out[1]=full_hash[1];
-}
-
-/* ----- Log messages ----- */
-static void add_log_message(AppleBleHashDemo* app, const char* message) {
-    int idx = (app->log_buffer.log_start+app->log_buffer.log_count)%MAX_LOG_LINES;
-    strncpy(app->log_buffer.log_lines[idx], message,63);
-    app->log_buffer.log_lines[idx][63]='\0';
-    if(app->log_buffer.log_count<MAX_LOG_LINES) app->log_buffer.log_count++;
-    else app->log_buffer.log_start=(app->log_buffer.log_start+1)%MAX_LOG_LINES;
-}
-
-/* ----- Load phone numbers from file ----- */
-static void load_phone_numbers(AppleBleHashDemo* app){
-    if(!app->use_brute_force || strlen(app->brute_force_file)==0) return;
-    if(app->phone_numbers) { free(app->phone_numbers); app->phone_numbers=NULL; app->phone_numbers_count=0; app->phone_numbers_capacity=0; }
-    phone_hash_db_free(&app->hash_db);
-
-    Storage* storage = furi_record_open(RECORD_STORAGE);
-    Stream* stream = buffered_file_stream_alloc(storage);
-    if(!buffered_file_stream_open(stream,app->brute_force_file,FSAM_READ,FSOM_OPEN_EXISTING)){
-        add_log_message(app,"Failed to open file!");
-        stream_free(stream);
-        furi_record_close(RECORD_STORAGE);
-        return;
-    }
-
-    app->phone_numbers_capacity = 100;
-    app->phone_numbers = malloc(sizeof(phone_e164_t)*app->phone_numbers_capacity);
-    FuriString* line_buffer = furi_string_alloc();
-    while(stream_read_line(stream,line_buffer)){
-        const char* line_cstr=furi_string_get_cstr(line_buffer);
-        if(furi_string_size(line_buffer)==0) continue;
-        phone_e164_t parsed_phone;
-        if(phone_parse_e164(line_cstr,&parsed_phone)==0){
-            if(app->phone_numbers_count>=app->phone_numbers_capacity){
-                size_t new_capacity=app->phone_numbers_capacity*2;
-                if(new_capacity>MAX_PHONE_NUMBERS) new_capacity=MAX_PHONE_NUMBERS;
-                phone_e164_t* new_array=realloc(app->phone_numbers,sizeof(phone_e164_t)*new_capacity);
-                if(new_array){ app->phone_numbers=new_array; app->phone_numbers_capacity=new_capacity; }
-                else break;
-            }
-            app->phone_numbers[app->phone_numbers_count]=parsed_phone;
-            app->phone_numbers_count++;
+    for(size_t i = 0; i < app->device_count; i++) {
+        if(strcmp(app->devices[i].mac, mac_str) == 0) {
+            app->devices[i].rssi = rssi;
+            app->devices[i].last_seen = furi_get_tick();
+            return &app->devices[i];
         }
     }
-    furi_string_free(line_buffer);
-    buffered_file_stream_close(stream);
-    stream_free(stream);
-    furi_record_close(RECORD_STORAGE);
 
-    if(app->phone_numbers_count>0){
-        phone_hash_db_init(&app->hash_db);
-        for(size_t i=0;i<app->phone_numbers_count;i++){
-            uint8_t hash[2];
-            compute_phone_hash(app->phone_numbers[i].e164,hash);
-            phone_hash_db_add_entry(&app->hash_db,hash,app->phone_numbers[i].e164);
-        }
-    }
+    if(app->device_count >= MAX_DEVICES) return NULL;
+
+    AppleDevice* dev = &app->devices[app->device_count++];
+    strcpy(dev->mac, mac_str);
+    dev->rssi = rssi;
+    dev->last_seen = furi_get_tick();
+    return dev;
 }
 
-/* ----- BLE Sniffer callback ----- */
-static void sniffer_packet_cb(const uint8_t* data, uint16_t len, int8_t rssi, void* ctx){
-    AppleBleHashDemo* app = ctx;
-    if(!app) return;
-    app->packets_seen++;
-    furi_hal_light_set(LightGreen,0xFF);
-    furi_delay_ms(25);
-    furi_hal_light_set(LightGreen,0x00);
+/* ---------------- BLE Sniffer Callback ---------------- */
+
+static void ble_sniffer_cb(
+    const uint8_t* data,
+    uint16_t len,
+    int8_t rssi,
+    void* ctx) {
+
+    AppleBleApp* app = ctx;
+    if(!app || len < 14) return;
+
+    // HCI LE Advertising Report
+    if(data[0] != 0x04 || data[1] != 0x3E || data[3] != 0x02) return;
+
+    uint8_t mac[6];
+    memcpy(mac, data + 7, 6);
+
+    find_or_add_device(app, mac, rssi);
+    app->packets++;
+
+    // LED blink
+    furi_hal_light_set(LightBlue, 0xFF);
+    furi_delay_ms(10);
+    furi_hal_light_set(LightBlue, 0x00);
 }
 
-/* ----- Draw callbacks ----- */
-static void draw_cb(Canvas* canvas, void* ctx){
-    AppleBleHashDemo* app=ctx;
+/* ---------------- UI ---------------- */
+
+static void draw_cb(Canvas* canvas, void* ctx) {
+    AppleBleApp* app = ctx;
     canvas_clear(canvas);
-    canvas_set_color(canvas,ColorBlack);
-    canvas_set_font(canvas,FontPrimary);
-    canvas_draw_str_aligned(canvas,64,3,AlignCenter,AlignTop,"AirDrop Hash Demo");
+    canvas_set_color(canvas, ColorBlack);
+
+    canvas_set_font(canvas, FontPrimary);
+    canvas_draw_str(canvas, 2, 10, "Apple BLE Scanner");
+
+    char buf[32];
+    snprintf(buf, sizeof(buf), "Devices: %d", (int)app->device_count);
+    canvas_draw_str(canvas, 2, 22, buf);
+
+    snprintf(buf, sizeof(buf), "Packets: %lu", app->packets);
+    canvas_draw_str(canvas, 2, 32, buf);
+
+    canvas_set_font(canvas, FontSecondary);
+
+    int y = 44;
+    for(size_t i = app->scroll;
+        i < app->device_count && y < 64;
+        i++) {
+
+        snprintf(
+            buf,
+            sizeof(buf),
+            "%s  %ddBm",
+            app->devices[i].mac,
+            app->devices[i].rssi);
+
+        canvas_draw_str(canvas, 2, y, buf);
+        y += 10;
+    }
 }
 
-/* ----- Input callback ----- */
-static void input_cb(InputEvent* evt, void* ctx){
-    AppleBleHashDemo* app=ctx;
-    furi_message_queue_put(app->input_queue,evt,0);
+/* ---------------- Input ---------------- */
+
+static void input_cb(InputEvent* evt, void* ctx) {
+    AppleBleApp* app = ctx;
+    furi_message_queue_put(app->input_queue, evt, 0);
 }
 
-/* ----- Main app ----- */
-int32_t apple_ble_hash_demo_app(void* p){
+/* ---------------- App Entry ---------------- */
+
+int32_t apple_ble_read_state_app(void* p) {
     UNUSED(p);
-    AppleBleHashDemo* app=malloc(sizeof(AppleBleHashDemo));
-    memset(app,0,sizeof(AppleBleHashDemo));
-    app->view_port=view_port_alloc();
-    app->input_queue=furi_message_queue_alloc(8,sizeof(InputEvent));
-    app->state=AppStateConfig;
 
-    view_port_draw_callback_set(app->view_port,draw_cb,app);
-    view_port_input_callback_set(app->view_port,input_cb,app);
-    app->gui=furi_record_open(RECORD_GUI);
-    gui_add_view_port(app->gui,app->view_port,GuiLayerFullscreen);
+    AppleBleApp* app = calloc(1, sizeof(AppleBleApp));
+    if(!app) return -1;
 
-    bool exit_loop=false;
+    app->input_queue = furi_message_queue_alloc(8, sizeof(InputEvent));
+    app->view_port = view_port_alloc();
+
+    view_port_draw_callback_set(app->view_port, draw_cb, app);
+    view_port_input_callback_set(app->view_port, input_cb, app);
+
+    app->gui = furi_record_open(RECORD_GUI);
+    gui_add_view_port(app->gui, app->view_port, GuiLayerFullscreen);
+
+    /* --- Start BLE RX --- */
+    furi_hal_bt_stop_advertising();
+    furi_hal_bt_reinit();
+    furi_delay_ms(300);
+
+    if(furi_hal_bt_start_rx(ble_sniffer_cb, app)) {
+        app->sniffer_running = true;
+        FURI_LOG_I(TAG, "BLE sniffer started");
+    } else {
+        FURI_LOG_E(TAG, "Failed to start BLE sniffer");
+    }
+
     InputEvent input;
+    bool exit = false;
 
-    while(!exit_loop){
-        if(furi_message_queue_get(app->input_queue,&input,10)==FuriStatusOk){
-            if(input.type==InputTypePress){
-                if(input.key==InputKeyBack) exit_loop=true;
+    while(!exit) {
+        if(furi_message_queue_get(app->input_queue, &input, 50) == FuriStatusOk) {
+            if(input.type == InputTypePress) {
+                switch(input.key) {
+                    case InputKeyUp:
+                        if(app->scroll > 0) app->scroll--;
+                        break;
+                    case InputKeyDown:
+                        if(app->scroll + 1 < app->device_count) app->scroll++;
+                        break;
+                    case InputKeyBack:
+                        exit = true;
+                        break;
+                    default:
+                        break;
+                }
             }
         }
         view_port_update(app->view_port);
-        furi_delay_ms(10);
     }
 
-    if(app->sniffer_active) furi_hal_bt_stop_rx();
-    view_port_enabled_set(app->view_port,false);
-    gui_remove_view_port(app->gui,app->view_port);
+    if(app->sniffer_running) {
+        furi_hal_bt_stop_rx();
+    }
+
+    gui_remove_view_port(app->gui, app->view_port);
     furi_record_close(RECORD_GUI);
     view_port_free(app->view_port);
     furi_message_queue_free(app->input_queue);
-    if(app->phone_numbers) free(app->phone_numbers);
-    phone_hash_db_free(&app->hash_db);
     free(app);
+
     return 0;
 }
