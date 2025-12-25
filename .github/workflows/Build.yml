@@ -1,50 +1,43 @@
-name: Build Flipper Zero App
+name: Build AirDox (Momentum Dev)
 
 on:
   push:
-    branches:
-      - main
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout repo
-      - name: Checkout repository
-        uses: actions/checkout@v3
+    - name: Checkout AirDox repo
+      uses: actions/checkout@v4
 
-      # Step 2: Install dependencies
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y git python3 python3-pip build-essential scons
+    - name: Install build dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y \
+          python3 \
+          python3-pip \
+          git \
+          build-essential \
+          libusb-1.0-0
 
-      # Step 3: Clone Flipper firmware
-      - name: Clone Flipper Zero Firmware
-        run: |
-          git clone --depth 1 https://github.com/flipperdevices/flipperzero-firmware.git
-          cd flipperzero-firmware
-          git submodule update --init --recursive
+    - name: Clone Momentum firmware (dev)
+      run: |
+        git clone --depth 1 https://github.com/Next-Flip/Momentum-Firmware.git flipperzero-firmware
 
-      # Step 4: Copy your app files into applications_user
-      - name: Copy app files
-        run: |
-          mkdir -p flipperzero-firmware/applications_user/air_dox
-          cp air_dox.c \
-             apple_ble_hash_demo.c \
-             apple_ble_hash_demo.h \
-             apple_ble_read_state.c \
-             apple_ble_read_state.h \
-             picohash.h \
-             tiny_e164.h \
-             application.fam \
-             air_dox.png \
-             flipperzero-firmware/applications_user/air_dox/
+    - name: Copy AirDox app into firmware
+      run: |
+        mkdir -p flipperzero-firmware/applications_user/air_dox
+        cp applications_user/air_dox/* flipperzero-firmware/applications_user/air_dox/
 
-      # Step 5: Build the app
-      - name: Build Flipper Zero App
-        run: |
-          cd flipperzero-firmware
-          ./fbt fap_air_dox
+    - name: Build AirDox FAP
+      run: |
+        cd flipperzero-firmware
+        ./fbt fap_air_dox
+
+    - name: Upload AirDox FAP
+      uses: actions/upload-artifact@v4
+      with:
+        name: air_dox_fap
+        path: flipperzero-firmware/build/**/*.fap
