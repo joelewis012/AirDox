@@ -1,3 +1,9 @@
 #pragma once
-#include <stdint.h>
-int32_t apple_ble_read_state_app(void* p);
+
+typedef struct {
+    bool active;
+    uint32_t counter;
+} AppleBleReadState;
+
+void apple_ble_read_state_init(AppleBleReadState* state);
+void apple_ble_read_state_tick(AppleBleReadState* state);
