@@ -1,3 +1,5 @@
+from flipper.app import App, FlipperAppType
+
 App(
     appid="air_dox",
     name="AirDox",
