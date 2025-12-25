@@ -1,4 +1,4 @@
-name: Build AirDox (Momentum Dev)
+name: Build AirDox FAP
 
 on:
   push:
@@ -9,35 +9,26 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout AirDox repo
-      uses: actions/checkout@v4
+      - name: Checkout app repo
+        uses: actions/checkout@v4
 
-    - name: Install dependencies
-      run: |
-        sudo apt update
-        sudo apt install -y \
-          python3 \
-          python3-pip \
-          git \
-          build-essential \
-          libusb-1.0-0
+      - name: Clone official Flipper firmware
+        run: |
+          git clone https://github.com/flipperdevices/flipperzero-firmware.git
+          cd flipperzero-firmware
 
-    - name: Clone Momentum firmware (dev)
-      run: |
-        git clone --depth 1 https://github.com/Next-Flip/Momentum-Firmware.git flipperzero-firmware
+      - name: Copy AirDox app into firmware
+        run: |
+          mkdir -p flipperzero-firmware/applications_user/air_dox
+          cp *.c *.h *.png application.fam flipperzero-firmware/applications_user/air_dox/
 
-    - name: Copy AirDox app
-      run: |
-        mkdir -p flipperzero-firmware/applications_user/air_dox
-        cp applications_user/air_dox/* flipperzero-firmware/applications_user/air_dox/
+      - name: Build AirDox FAP only
+        run: |
+          cd flipperzero-firmware
+          ./fbt fap_air_dox
 
-    - name: Build user apps only
-      run: |
-        cd flipperzero-firmware
-        ./fbt fap_user
-
-    - name: Upload AirDox FAP
-      uses: actions/upload-artifact@v4
-      with:
-        name: air_dox_fap
-        path: flipperzero-firmware/build/**/*.fap
+      - name: Upload FAP
+        uses: actions/upload-artifact@v4
+        with:
+          name: air_dox_fap
+          path: flipperzero-firmware/dist/*.fap
