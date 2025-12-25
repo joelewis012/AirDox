@@ -12,21 +12,21 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Clone official Flipper firmware
+      - name: Clone Flipper Zero firmware
         run: |
           git clone https://github.com/flipperdevices/flipperzero-firmware.git
 
       - name: Copy AirDox app into firmware
         run: |
           mkdir -p flipperzero-firmware/applications_user/air_dox
-          cp AirDox/applications_user/air_dox/* flipperzero-firmware/applications_user/air_dox/
+          cp applications_user/air_dox/* flipperzero-firmware/applications_user/air_dox/
 
       - name: Build AirDox FAP
         run: |
           cd flipperzero-firmware
           ./fbt fap_air_dox
 
-      - name: Upload FAP artifact
+      - name: Upload FAP
         uses: actions/upload-artifact@v4
         with:
           name: air_dox_fap
