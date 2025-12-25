@@ -1,47 +1,12 @@
-name: Build AirDox FAP
-
-on:
-  push:
-    branches: [ master ]
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout your app
-        uses: actions/checkout@v4
-
-      - name: Checkout Flipper firmware (dev)
-        uses: actions/checkout@v4
-        with:
-          repository: flipperdevices/flipperzero-firmware
-          ref: dev
-          path: flipperzero-firmware
-
-      - name: Install build tools
-        run: |
-          sudo apt update
-          sudo apt install -y \
-            python3 \
-            git \
-            gcc-arm-none-eabi \
-            libnewlib-arm-none-eabi \
-            libstdc++-arm-none-eabi-newlib
-
-      - name: Copy app into firmware
-        run: |
-          mkdir -p flipperzero-firmware/applications_user/air_dox
-          cp *.c *.h *.png application.fam flipperzero-firmware/applications_user/air_dox/
-
-      - name: Build the app
-        working-directory: flipperzero-firmware
-        run: |
-          ./fbt fap_air_dox
-
-      - name: Upload .fap
-        uses: actions/upload-artifact@v4
-        with:
-          name: air_dox.fap
-          path: flipperzero-firmware/build/f7-firmware-D/.extapps/air_dox.fap
+- run: |
+    mkdir -p flipperzero-firmware/applications_user/air_dox
+    cp air_dox.c \
+       apple_ble_hash_demo.c \
+       apple_ble_hash_demo.h \
+       apple_ble_read_state.c \
+       apple_ble_read_state.h \
+       picohash.h \
+       tiny_e164.h \
+       application.fam \
+       air_dox.png \
+       flipperzero-firmware/applications_user/air_dox/
