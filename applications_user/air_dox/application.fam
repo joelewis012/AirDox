@@ -1,17 +1,8 @@
 App(
     appid="air_dox",
     name="AirDox",
+    apptype=FlipperAppType.EXTERNAL,
     entry_point="air_dox_app",
-    apptype="user",
-    stack_size=4096,
-    icon="air_dox",
-    sources=[
-        "air_dox.c",
-        "apple_ble_hash_demo.c",
-        "apple_ble_hash_demo.h",
-        "apple_ble_read_state.c",
-        "apple_ble_read_state.h",
-        "picohash.h",
-        "tiny_e164.h"
-    ]
+    requires=["gui", "bt"],
+    icon="air_dox.png",
 )
