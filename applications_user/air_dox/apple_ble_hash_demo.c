@@ -1,13 +1,30 @@
 #include "apple_ble_hash_demo.h"
-#include "furi_hal.h"
-#include "furi_hal_bt.h"
-#include "furi.h"
+#include <furi.h>
+#include <gui/gui.h>
+#include <gui/elements.h>
 
-static const char* TAG = "BLE_Hash_Demo";
+static void draw(Canvas* c, void* ctx) {
+    UNUSED(ctx);
+    canvas_clear(c);
+    canvas_set_font(c, FontPrimary);
+    canvas_draw_str_aligned(c, 64, 20, AlignCenter, AlignTop, "Apple Hash Demo");
+    canvas_set_font(c, FontSecondary);
+    canvas_draw_str_aligned(c, 64, 36, AlignCenter, AlignTop,
+        "Offline correlation\n(no device contact)");
+}
 
-void start_ble_hash_demo() {
-    uint8_t channel = 0; // choose the BLE channel
-    furi_hal_bt_start_rx(channel);
+int32_t apple_ble_hash_demo_app(void* p) {
+    UNUSED(p);
+    ViewPort* vp = view_port_alloc();
+    view_port_draw_callback_set(vp, draw, NULL);
 
-    FURI_LOG_I(TAG, "BLE hash demo started on channel %d", channel);
+    Gui* gui = furi_record_open(RECORD_GUI);
+    gui_add_view_port(gui, vp, GuiLayerFullscreen);
+
+    furi_delay_ms(3000);
+
+    gui_remove_view_port(gui, vp);
+    furi_record_close(RECORD_GUI);
+    view_port_free(vp);
+    return 0;
 }
