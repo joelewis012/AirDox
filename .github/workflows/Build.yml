@@ -1,12 +1,50 @@
-- run: |
-    mkdir -p flipperzero-firmware/applications_user/air_dox
-    cp air_dox.c \
-       apple_ble_hash_demo.c \
-       apple_ble_hash_demo.h \
-       apple_ble_read_state.c \
-       apple_ble_read_state.h \
-       picohash.h \
-       tiny_e164.h \
-       application.fam \
-       air_dox.png \
-       flipperzero-firmware/applications_user/air_dox/
+name: Build Flipper Zero App
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout repo
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Step 2: Install dependencies
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git python3 python3-pip build-essential scons
+
+      # Step 3: Clone Flipper firmware
+      - name: Clone Flipper Zero Firmware
+        run: |
+          git clone --depth 1 https://github.com/flipperdevices/flipperzero-firmware.git
+          cd flipperzero-firmware
+          git submodule update --init --recursive
+
+      # Step 4: Copy your app files into applications_user
+      - name: Copy app files
+        run: |
+          mkdir -p flipperzero-firmware/applications_user/air_dox
+          cp air_dox.c \
+             apple_ble_hash_demo.c \
+             apple_ble_hash_demo.h \
+             apple_ble_read_state.c \
+             apple_ble_read_state.h \
+             picohash.h \
+             tiny_e164.h \
+             application.fam \
+             air_dox.png \
+             flipperzero-firmware/applications_user/air_dox/
+
+      # Step 5: Build the app
+      - name: Build Flipper Zero App
+        run: |
+          cd flipperzero-firmware
+          ./fbt fap_air_dox
