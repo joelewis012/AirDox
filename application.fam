@@ -1,23 +1,17 @@
 App(
-    appid = "air_dox",
-    name = "AirDox",
-    apptype = FlipperAppType.EXTERNAL,
-    entry_point = "air_dox_app",
-
-    stack_size = 3072,
-
-    requires = ["bt"],
-
-    fap_category = "Bluetooth",
-    fap_version = "0.1.0",
-    fap_icon = "air_dox.png",
-    fap_description = "Fun with Apple BLE",
-    fap_author = "Carter Annandale",
-    fap_weburl = "https://github.com/carter-0/AirDox",
-
-    sources = [
+    appid="air_dox",
+    name="AirDox",
+    entry_point="air_dox_app",
+    stack_size=4096,
+    icon="A_Dox",
+    sources=[
         "air_dox.c",
         "apple_ble_read_state.c",
+        "apple_ble_read_state.h",
         "apple_ble_hash_demo.c",
-    ],
+        "apple_ble_hash_demo.h",
+        "picohash.c",
+        "picohash.h",
+        "tiny_e164.h"
+    ]
 )
