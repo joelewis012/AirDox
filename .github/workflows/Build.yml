@@ -12,7 +12,7 @@ jobs:
     - name: Checkout AirDox repo
       uses: actions/checkout@v4
 
-    - name: Install build dependencies
+    - name: Install dependencies
       run: |
         sudo apt update
         sudo apt install -y \
@@ -26,15 +26,15 @@ jobs:
       run: |
         git clone --depth 1 https://github.com/Next-Flip/Momentum-Firmware.git flipperzero-firmware
 
-    - name: Copy AirDox app into firmware
+    - name: Copy AirDox app
       run: |
         mkdir -p flipperzero-firmware/applications_user/air_dox
         cp applications_user/air_dox/* flipperzero-firmware/applications_user/air_dox/
 
-    - name: Build AirDox FAP
+    - name: Build user apps only
       run: |
         cd flipperzero-firmware
-        ./fbt fap_air_dox
+        ./fbt fap_user
 
     - name: Upload AirDox FAP
       uses: actions/upload-artifact@v4
