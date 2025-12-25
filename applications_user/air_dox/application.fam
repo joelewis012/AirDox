@@ -1,9 +1,9 @@
-from flipper.app import App, FlipperAppType
+from flipper.app import App, AppType
 
 App(
     appid="air_dox",
     name="AirDox",
-    apptype=FlipperAppType.USER,
+    apptype=AppType.USER,
     entry_point="air_dox_app",
     icon="air_dox.png",
 )
