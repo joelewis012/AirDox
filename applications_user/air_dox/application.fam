@@ -1,8 +1,7 @@
-App(
-    appid="air_dox",
-    name="AirDox",
-    apptype=FlipperAppType.EXTERNAL,
-    entry_point="air_dox_app",
-    requires=["gui", "bt"],
-    icon="air_dox.png",
-)
+appid: air_dox
+name: AirDox
+version: 1.0.0
+author: YourName
+description: BLE testing app for AirDox
+type: user
+icon: air_dox.png
