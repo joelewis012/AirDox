@@ -1,7 +1,5 @@
 appid: air_dox
 name: AirDox
-version: 1.0.0
-author: YourName
-description: BLE testing app for AirDox
-type: user
+apptype: user
+version: 1.0
 icon: air_dox.png
