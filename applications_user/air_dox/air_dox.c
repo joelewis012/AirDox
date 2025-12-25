@@ -1,140 +1,85 @@
 #include <furi.h>
 #include <gui/gui.h>
-#include <input/input.h>
 #include <gui/elements.h>
-#include <stdlib.h>
-#include <string.h>
+#include <input/input.h>
 
 #include "apple_ble_read_state.h"
 #include "apple_ble_hash_demo.h"
 
-#define TAG "AirDox"
-
-/* ---------------- Menu entries ---------------- */
-
 typedef enum {
-    DemoAppleBleSniffer = 0,
-    DemoAppleBleHashDemo,
+    DemoReadState = 0,
+    DemoHashDemo,
     DemoCount,
 } DemoIndex;
 
 typedef struct {
-    const char* name;
-    int32_t (*app)(void*);
-} DemoEntry;
+    Gui* gui;
+    ViewPort* vp;
+    FuriMessageQueue* q;
+    DemoIndex sel;
+} App;
 
-static const DemoEntry demos[DemoCount] = {
-    { "Apple BLE Sniffer", apple_ble_read_state_app },
-    { "AirDrop Hash Demo", apple_ble_hash_demo_app },
+static const char* items[DemoCount] = {
+    "BLE Scanner (Passive)",
+    "Apple Hash Demo",
 };
 
-/* ---------------- App state ---------------- */
+static void draw(Canvas* c, void* ctx) {
+    App* a = ctx;
+    canvas_clear(c);
+    canvas_set_font(c, FontPrimary);
+    canvas_draw_str_aligned(c, 64, 2, AlignCenter, AlignTop, "AirDox");
 
-typedef struct {
-    ViewPort* view_port;
-    Gui* gui;
-    FuriMessageQueue* input_queue;
-    DemoIndex selected;
-} AirDoxApp;
-
-/* ---------------- Draw ---------------- */
-
-static void air_dox_draw(Canvas* canvas, void* ctx) {
-    AirDoxApp* app = ctx;
-    canvas_clear(canvas);
-
-    canvas_set_font(canvas, FontPrimary);
-    canvas_draw_str_aligned(canvas, 64, 2, AlignCenter, AlignTop, "AirDox");
-
-    canvas_set_font(canvas, FontSecondary);
-    canvas_draw_str_aligned(canvas, 64, 14, AlignCenter, AlignTop, "Select mode");
-
-    int y = 28;
+    canvas_set_font(c, FontSecondary);
     for(size_t i = 0; i < DemoCount; i++) {
-        if(i == app->selected) {
-            canvas_draw_box(canvas, 0, y - 2, 128, 12);
-            canvas_set_color(canvas, ColorWhite);
+        if(i == a->sel) {
+            canvas_draw_box(c, 0, 18 + i*12, 128, 11);
+            canvas_set_color(c, ColorWhite);
         }
-
-        canvas_draw_str_aligned(canvas, 64, y, AlignCenter, AlignTop, demos[i].name);
-
-        if(i == app->selected) {
-            canvas_set_color(canvas, ColorBlack);
-        }
-
-        y += 14;
+        canvas_draw_str_aligned(c, 64, 20 + i*12, AlignCenter, AlignTop, items[i]);
+        canvas_set_color(c, ColorBlack);
     }
-
-    canvas_draw_str_aligned(
-        canvas, 64, 64, AlignCenter, AlignBottom,
-        "OK = Run   Back = Exit"
-    );
 }
 
-/* ---------------- Input ---------------- */
-
-static void air_dox_input(InputEvent* event, void* ctx) {
-    AirDoxApp* app = ctx;
-    furi_message_queue_put(app->input_queue, event, FuriWaitForever);
+static void input(InputEvent* e, void* ctx) {
+    App* a = ctx;
+    furi_message_queue_put(a->q, e, 0);
 }
-
-/* ---------------- Main app ---------------- */
 
 int32_t air_dox_app(void* p) {
     UNUSED(p);
+    App* a = malloc(sizeof(App));
+    a->q = furi_message_queue_alloc(8, sizeof(InputEvent));
+    a->vp = view_port_alloc();
+    view_port_draw_callback_set(a->vp, draw, a);
+    view_port_input_callback_set(a->vp, input, a);
 
-    AirDoxApp* app = malloc(sizeof(AirDoxApp));
-    if(!app) return -1;
-    memset(app, 0, sizeof(AirDoxApp));
+    a->gui = furi_record_open(RECORD_GUI);
+    gui_add_view_port(a->gui, a->vp, GuiLayerFullscreen);
 
-    app->input_queue = furi_message_queue_alloc(8, sizeof(InputEvent));
-    app->view_port = view_port_alloc();
-
-    view_port_draw_callback_set(app->view_port, air_dox_draw, app);
-    view_port_input_callback_set(app->view_port, air_dox_input, app);
-
-    app->gui = furi_record_open(RECORD_GUI);
-    gui_add_view_port(app->gui, app->view_port, GuiLayerFullscreen);
-
-    InputEvent event;
+    InputEvent e;
     bool exit = false;
-
     while(!exit) {
-        if(furi_message_queue_get(app->input_queue, &event, FuriWaitForever) == FuriStatusOk) {
-            if(event.type == InputTypePress) {
-                switch(event.key) {
-                case InputKeyUp:
-                    if(app->selected > 0) app->selected--;
-                    break;
-
-                case InputKeyDown:
-                    if(app->selected + 1 < DemoCount) app->selected++;
-                    break;
-
-                case InputKeyOk:
-                    gui_remove_view_port(app->gui, app->view_port);
-                    demos[app->selected].app(NULL);
-                    gui_add_view_port(app->gui, app->view_port, GuiLayerFullscreen);
-                    break;
-
-                case InputKeyBack:
-                    exit = true;
-                    break;
-
-                default:
-                    break;
+        if(furi_message_queue_get(a->q, &e, FuriWaitForever) == FuriStatusOk) {
+            if(e.type == InputTypePress) {
+                if(e.key == InputKeyUp && a->sel > 0) a->sel--;
+                if(e.key == InputKeyDown && a->sel + 1 < DemoCount) a->sel++;
+                if(e.key == InputKeyOk) {
+                    gui_remove_view_port(a->gui, a->vp);
+                    if(a->sel == DemoReadState) apple_ble_read_state_app(NULL);
+                    if(a->sel == DemoHashDemo)  apple_ble_hash_demo_app(NULL);
+                    gui_add_view_port(a->gui, a->vp, GuiLayerFullscreen);
                 }
+                if(e.key == InputKeyBack) exit = true;
             }
-            view_port_update(app->view_port);
+            view_port_update(a->vp);
         }
     }
 
-    gui_remove_view_port(app->gui, app->view_port);
+    gui_remove_view_port(a->gui, a->vp);
     furi_record_close(RECORD_GUI);
-
-    view_port_free(app->view_port);
-    furi_message_queue_free(app->input_queue);
-    free(app);
-
+    view_port_free(a->vp);
+    furi_message_queue_free(a->q);
+    free(a);
     return 0;
 }
