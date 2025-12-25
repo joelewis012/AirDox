@@ -1,9 +1,9 @@
-from flipper.app import App, AppType
-
 App(
-    appid="air_dox",
+    appid="airdox",
     name="AirDox",
-    apptype=AppType.USER,
-    entry_point="air_dox_app",
-    icon="air_dox.png",
+    apptype=FlipperAppType.EXTERNAL,
+    entry_point="airdox_app",
+    stack_size=4096,
+    icon="AirdoxIcon",
+    sdk_version=18,
 )
