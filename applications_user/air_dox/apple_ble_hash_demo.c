@@ -1,30 +1,13 @@
 #include "apple_ble_hash_demo.h"
+#include "apple_ble_read_state.h"
+
 #include <furi.h>
-#include <gui/gui.h>
-#include <gui/elements.h>
 
-static void draw(Canvas* c, void* ctx) {
-    UNUSED(ctx);
-    canvas_clear(c);
-    canvas_set_font(c, FontPrimary);
-    canvas_draw_str_aligned(c, 64, 20, AlignCenter, AlignTop, "Apple Hash Demo");
-    canvas_set_font(c, FontSecondary);
-    canvas_draw_str_aligned(c, 64, 36, AlignCenter, AlignTop,
-        "Offline correlation\n(no device contact)");
-}
+#define TAG "AppleHashDemo"
 
-int32_t apple_ble_hash_demo_app(void* p) {
-    UNUSED(p);
-    ViewPort* vp = view_port_alloc();
-    view_port_draw_callback_set(vp, draw, NULL);
+static AppleBleReadState demo_state;
 
-    Gui* gui = furi_record_open(RECORD_GUI);
-    gui_add_view_port(gui, vp, GuiLayerFullscreen);
-
-    furi_delay_ms(3000);
-
-    gui_remove_view_port(gui, vp);
-    furi_record_close(RECORD_GUI);
-    view_port_free(vp);
-    return 0;
+void apple_ble_hash_demo_init(void) {
+    apple_ble_read_state_init(&demo_state);
+    FURI_LOG_I(TAG, "Apple BLE hash demo initialized");
 }
