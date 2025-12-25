@@ -1,5 +1,7 @@
-appid: air_dox
-name: AirDox
-apptype: user
-version: 1.0
-icon: air_dox.png
+App(
+    appid="air_dox",
+    name="AirDox",
+    apptype=FlipperAppType.USER,
+    entry_point="air_dox_app",
+    icon="air_dox.png",
+)
