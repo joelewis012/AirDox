@@ -1,19 +1,9 @@
 App(
-    appid="air_dox",
+    appid="airdox",
     name="AirDox",
     apptype=FlipperAppType.EXTERNAL,
-    entry_point="air_dox_app",
-    stack_size=2 * 1024,
-    requires=["bt"],
-    fap_category="Bluetooth",
-    sources=[
-        "air_dox.c",
-        "apple_ble_read_state.c",
-        "apple_ble_hash_demo.c"
-    ],
-    fap_version="0.1.0",
-    fap_icon="air_dox.png",
-    fap_description="Fun with Apple BLE",
-    fap_author="Carter Annandale",
-    fap_weburl="https://github.com/carter-0/AirDox"
+    entry_point="airdox_app",
+    stack_size=4096,
+    icon="AirdoxIcon",
+    sdk_version=18,
 )
