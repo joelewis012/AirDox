@@ -2,16 +2,15 @@ App(
     appid="air_dox",
     name="AirDox",
     entry_point="air_dox_app",
+    apptype="user",
     stack_size=4096,
-    icon="A_Dox",
-    apptype="user",   # <-- this is required now
+    icon="air_dox",
     sources=[
         "air_dox.c",
-        "apple_ble_read_state.c",
-        "apple_ble_read_state.h",
         "apple_ble_hash_demo.c",
         "apple_ble_hash_demo.h",
-        "picohash.c",
+        "apple_ble_read_state.c",
+        "apple_ble_read_state.h",
         "picohash.h",
         "tiny_e164.h"
     ]
